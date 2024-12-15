@@ -1,5 +1,4 @@
-# networking2_prediction
-project networking 2 on SDN prediction
+
 # Network Throughput Prediction with LSTM
 
 This project aims to predict network throughput in Software-Defined Networks (SDN) using machine learning techniques. It includes automated packet capturing, preprocessing of pcap files, and an LSTM-based prediction model.
@@ -15,17 +14,18 @@ This project aims to predict network throughput in Software-Defined Networks (SD
 
 ## Prerequisites
 
-Make sure you have the following installed on your system:
+Before you begin, make sure you have the following installed:
+
 - **Python**: Version >= 3.8
 - **Git**: Version >= 2.30
-- **VirtualBox**: To run the Comnetsemu environment
+- **VirtualBox**: For running the Comnetsemu environment
 - **Mininet**: For SDN simulation
-- **Git LFS**: For managing large files like `.pcap`
-- Additional Python libraries (see [requirements.txt](requirements.txt))
+- **Git LFS**: For managing large files (e.g., `.pcap` files)
+- **Required Python libraries**: These can be found in the `requirements.txt` file.
 
 ## Installation
 
-1. Clone this repository:
+1. Clone the repository:
    ```bash
    git clone https://github.com/yourusername/networking2_prediction.git
    cd networking2_prediction
@@ -37,45 +37,63 @@ Make sure you have the following installed on your system:
    ```
 
 3. Set up VirtualBox and Comnetsemu:
-   Follow the instructions from the [Comnetsemu documentation](https://www.comnetsemu.com) to configure the environment.
-
-4. Set up Git LFS:
-   ```bash
-   git lfs install
-   ```
+   Follow the instructions in the [Comnetsemu documentation](https://www.comnetsemu.com) to configure the environment.
 
 ## Project Structure
 
 ```plaintext
 networking2_prediction/
-|
-|-- network/             # Scripts to set up and manage the SDN simulation
-|   |-- network_simulation.py
-|
-|-- preprocessing/       # Scripts to preprocess `.pcap` files
-|   |-- preprocess_pcap.py
-|
-|-- lstm/                # Scripts to train and evaluate the LSTM model
-|   |-- train_lstm.py
-|   |-- evaluate_model.py
-|
-|-- file_da_predirre/    # Folder containing `.pcap` files for prediction
-|
-|-- README.md            # Project documentation (this file)
-|-- requirements.txt     # Python dependencies
+│
+├── network/                # SDN simulation setup and management
+│   └── web_server_forse_funzionante.py
+│
+├── preprocessing/          # Scripts to preprocess `.pcap` files
+│   ├── pcap_to_csv.py
+│   └── csvfeatures.py
+│
+├── lstm/                   # LSTM model training and evaluation
+│   ├── lstm.py
+│
+├── prediction/             # Folder containing `.csv` files for prediction and testing
+│
+├── README.md               # Project documentation (this file)
+├── requirements.txt        # Python dependencies
 ```
 
 ## Running the Project
 
 ### Step 1: Start the Network Simulation
-Navigate to the `network` folder and run the network script:
+Run the Comnetsemu VM in VirtualBox. Before starting the VM, set up port forwarding via SSH to use the terminal for running simulations. Once the VM is open, connect via SSH with the following command:
+```bash
+ssh -X -p 3022 comnetsemu@localhost
+```
+After logging in, configure the display for network visualization:
+```bash
+export DISPLAY=192.168.1.177:0.0
+xclock
+```
+
+Make sure no previous Docker containers are running:
+```bash
+docker ps
+docker stop $(docker ps -q)
+ps aux | grep docker
+sudo kill -9 <process_id>
+```
+
+Ensure there are no networks in the VM:
+```bash
+sudo mn -c
+```
+
+Once everything is ready, navigate to the `network` folder and start the simulation:
 ```bash
 cd network
-python3 network_simulation.py
+sudo python3 web_server_forse_funzionante.py
 ```
 
 ### Step 2: Generate Traffic
-Use tools like `iperf` to generate random traffic. The captured data will be saved as `.pcap` files in the `file_da_predirre` directory.
+Use `iperf` or similar tools to generate traffic. The captured data will be saved as `.pcap` files in the `file_da_predirre` directory.
 
 ### Step 3: Preprocess the Data
 Preprocess the `.pcap` files by running:
@@ -85,29 +103,34 @@ python3 preprocess_pcap.py
 ```
 
 ### Step 4: Train and Test the LSTM Model
-Train the model using the preprocessed data:
+Train the LSTM model with the preprocessed data:
 ```bash
 cd lstm
 python3 train_lstm.py
 ```
-Evaluate the predictions:
+
+Evaluate the model's predictions:
 ```bash
 python3 evaluate_model.py
 ```
 
 ## Contributing
 
-We welcome contributions to this project! To contribute:
+We welcome contributions! To contribute:
 1. Fork the repository.
-2. Create a branch for your feature:
+2. Create a feature branch:
    ```bash
    git checkout -b feature-name
    ```
-3. Push your changes:
+3. Commit your changes:
+   ```bash
+   git commit -m "Add feature"
+   ```
+4. Push your changes:
    ```bash
    git push origin feature-name
    ```
-4. Submit a pull request.
+5. Submit a pull request.
 
 ## License
 
@@ -116,6 +139,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Contact
 
 For questions or support, contact:
-- **Your Name**: your.email@example.com
-- **Teammate's Name**: teammate.email@example.com
+- **Paolo Bormolini**: paolo.bormolini@studenti.unitn.it
+- **Carolina Sopranzetti**: carolina.sopranzetti@studenti.unitn.it
 
