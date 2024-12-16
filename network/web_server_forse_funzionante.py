@@ -69,16 +69,35 @@ def start_ryu_controller():
         print(f"[ERROR] Failed to start Ryu controller: {e}")
         raise
     
+def start_tcpdump(net, dump_dir="/mnt/shared_dumps"):
+    """
+    Start tcpdump on all hosts and switches in the network.
+    Saves output to .pcap files in the specified directory.
+    """
+    if not os.path.exists(dump_dir):
+        os.makedirs(dump_dir)  # Creazione della directory se non esiste
+    
+    processes = {}
+    for host in net.hosts + net.switches:
+        # Genera il percorso del file dump
+        dump_file = os.path.join(dump_dir, f"{host.name}_traffic.pcap")
+        # Avvia tcpdump
+        cmd = f"tcpdump -i {host.defaultIntf()} -w {dump_file} -U"
+        info(f"Starting tcpdump on {host.name}, saving to {dump_file}...\n")
+        processes[host.name] = host.popen(cmd, shell=True)
+    
+    return processes
 
 def start():
-    setLogLevel("INFO")
+    setLogLevel("info")
     setup_webserver_image()
     # Start the Ryu controller
     ryu_process = start_ryu_controller()
 
     try:
+        time.sleep(5)
         # Set up remote controller
-        controller = RemoteController("c1", ip="*********", port=6633)
+        controller = RemoteController("c1", ip="127.0.0.1", port=6633)
 
         # Initialize the network
         net = Containernet(controller=controller, switch=OVSKernelSwitch, link=TCLink, build=False)
@@ -94,7 +113,8 @@ def start():
         net.start()
         info("[INFO] Network started...\n")
 
-        
+        dump_dir = "/mnt/shared_dumps"
+        tcpdump_processes = start_tcpdump(net, dump_dir)
         # Dynamically add containers with specific configurations
         mgr.addContainer("nginx_srv", "h5", "nginx:alpine", "nginx -g 'daemon off;'", docker_args={})
         mgr.addContainer("apache_srv", "h6", "httpd:alpine", "httpd-foreground", docker_args={})
@@ -119,6 +139,10 @@ def start():
         
         
     finally:
+        # Close tcpdump process
+        print("[INFO] Stopping tcpdump process...")
+        for process in tcpdump_processes.values():
+            process.terminate()
         # Cleanup after test
         print("[INFO] Stopping the network...")
         net.stop()
@@ -134,46 +158,7 @@ def start():
             print(stdout)
             print("[RYU CONTROLLER ERROR]")
             print(stderr)
-    
-    
-    # controller = RemoteController("c1", ip="127.0.0.1", port=6633)
-    
-    # # Create Containernet instance
-    # net = Containernet(controller=controller, switch=OVSKernelSwitch, link=TCLink, build=False)
-    # mgr = VNFManager(net)
-    # topo = MyTopo()
-    # topo.build(net)
-    # net.addController(controller)
-    
-    # # Start the network
-    # info("Starting network...\n")
-    # net.start()
-    # info("Network started...\n")
 
-    # # Dynamically add containers with specific configurations
-    # mgr.addContainer("nginx_srv", "h5", "nginx:alpine", "nginx -g 'daemon off;'", docker_args={})
-    # mgr.addContainer("apache_srv", "h6", "httpd:alpine", "httpd-foreground", docker_args={})
-    # mgr.addContainer("caddy_srv", "h7", "caddy:alpine", "caddy run --config /etc/caddy/Caddyfile", docker_args={})
-    
-    # # Allow some time for services to start
-    # time.sleep(60)
-    
-    # # Verify web servers from h1
-    # h1 = net.get("h1")
-    # info(h1.cmd("curl http://10.0.0.5"))  # Test Nginx at h5
-    # info(h1.cmd("curl http://10.0.0.6"))  # Test apache at h6
-    # info(h1.cmd("curl http://10.0.0.7"))  # Test caddy at h7
-
-    # # CLI for user interaction
-    # CLI(net)
-    
-    # # Cleanup containers and network
-    # mgr.removeContainer("nginx_srv")
-    # mgr.removeContainer("apache_srv")
-    # mgr.removeContainer("caddy_srv")
-    # net.stop()
-    # mgr.stop()
-    # os.system("sudo mn -c")
 
 if __name__ == "__main__":
     start()
