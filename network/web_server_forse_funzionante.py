@@ -6,6 +6,7 @@ from mininet.node import Host, RemoteController, OVSKernelSwitch
 import os
 import time
 import subprocess
+import shlex
 
 def setup_webserver_image():
     """
@@ -14,6 +15,38 @@ def setup_webserver_image():
     os.system("docker pull httpd:alpine")  # Apache
     os.system("docker pull nginx:alpine")  # Nginx
     os.system("docker pull caddy:alpine")  # Caddy
+    
+def setup_docker_images():
+    """
+    Prepare Docker images for web servers: httpd (Apache), nginx, and lighttpd.
+    Run the Docker pull command for each image.
+    """
+
+    # Cleanup existing containers
+    for container in ["h5", "h6", "h7"]:
+        print(f"[INFO] Removing old container: {container} (if exists)")
+        subprocess.run(f"docker rm -f {container}", shell=True, stderr=subprocess.DEVNULL)
+
+    images = ["httpd:alpine", "nginx:alpine", "caddy:alpine"]
+    for image in images:
+        # Check if the image already exists
+        try:
+            image_name = shlex.split(image)[0]  # Account for potential arguments in the image name
+            print(f"[INFO] Checking if image '{image}' is present locally...")
+            result = subprocess.run(
+                f"docker images -q {image_name}", 
+                shell=True, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE, 
+                text=True
+            )
+            if result.stdout.strip():  # If stdout contains something, the image exists
+                print(f"[INFO] Image '{image}' already exists locally, skipping pull.")
+            else:
+                print(f"[INFO] Image '{image}' not found locally, pulling...")
+                subprocess.run(f"docker pull {image}", shell=True, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"[ERROR] Failed to check/pull image '{image}': {e}")
 
 class MyTopo:
     def build(self, net):
@@ -90,7 +123,8 @@ def start_tcpdump(net, dump_dir="/mnt/shared_dumps"):
 
 def start():
     setLogLevel("info")
-    setup_webserver_image()
+    # setup_webserver_image()
+    setup_docker_images()
     # Start the Ryu controller
     ryu_process = start_ryu_controller()
 
