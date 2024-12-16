@@ -5,6 +5,7 @@ from mininet.log import setLogLevel, info
 from mininet.node import Host, RemoteController, OVSKernelSwitch
 import os
 import time
+import subprocess
 
 def setup_webserver_image():
     """
@@ -48,48 +49,131 @@ class MyTopo:
         net.addLink(s2, s3, cls=TCLink, bw=40, delay="15ms")
         net.addLink(s2, s4, cls=TCLink, bw=40, delay="15ms")
         net.addLink(s3, s4, cls=TCLink, bw=40, delay="15ms")
+        
+        
+def start_ryu_controller():
+    """
+    Start the Ryu controller using ryu-manager.
+    """
+    try:
+        print("[INFO] Starting Ryu controller...")
+        process = subprocess.Popen(
+            ["ryu-manager", "/usr/lib/python3/dist-packages/ryu/app/simple_switch_stp_13.py"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        print("[INFO] Ryu controller started successfully.")
+        return process
+    except Exception as e:
+        print(f"[ERROR] Failed to start Ryu controller: {e}")
+        raise
+    
 
 def start():
-    setLogLevel("info")
+    setLogLevel("INFO")
     setup_webserver_image()
-    controller = RemoteController("c1", ip="127.0.0.1", port=6633)
-    
-    # Create Containernet instance
-    net = Containernet(controller=controller, switch=OVSKernelSwitch, link=TCLink, build=False)
-    mgr = VNFManager(net)
-    topo = MyTopo()
-    topo.build(net)
-    net.addController(controller)
-    
-    # Start the network
-    info("Starting network...\n")
-    net.start()
-    info("Network started...\n")
+    # Start the Ryu controller
+    ryu_process = start_ryu_controller()
 
-    # Dynamically add containers with specific configurations
-    mgr.addContainer("nginx_srv", "h5", "nginx:alpine", "nginx -g 'daemon off;'", docker_args={})
-    mgr.addContainer("apache_srv", "h6", "httpd:alpine", "httpd-foreground", docker_args={})
-    mgr.addContainer("caddy_srv", "h7", "caddy:alpine", "caddy run --config /etc/caddy/Caddyfile", docker_args={})
-    
-    # Allow some time for services to start
-    time.sleep(60)
-    
-    # Verify web servers from h1
-    h1 = net.get("h1")
-    info(h1.cmd("curl http://10.0.0.5"))  # Test Nginx at h5
-    info(h1.cmd("curl http://10.0.0.6"))  # Test apache at h6
-    info(h1.cmd("curl http://10.0.0.7"))  # Test caddy at h7
+    try:
+        # Set up remote controller
+        controller = RemoteController("c1", ip="*********", port=6633)
 
-    # CLI for user interaction
-    CLI(net)
+        # Initialize the network
+        net = Containernet(controller=controller, switch=OVSKernelSwitch, link=TCLink, build=False)
+        mgr = VNFManager(net)
+        # Set up the topology
+        topo = MyTopo()
+        topo.build(net)
+
+        # Add controller to the network
+        net.addController(controller)
+        # Start the network
+        info("[INFO] Starting network...\n")
+        net.start()
+        info("[INFO] Network started...\n")
+
+        
+        # Dynamically add containers with specific configurations
+        mgr.addContainer("nginx_srv", "h5", "nginx:alpine", "nginx -g 'daemon off;'", docker_args={})
+        mgr.addContainer("apache_srv", "h6", "httpd:alpine", "httpd-foreground", docker_args={})
+        mgr.addContainer("caddy_srv", "h7", "caddy:alpine", "caddy run --config /etc/caddy/Caddyfile", docker_args={})
+        
+        # Allow some time for services to start
+        time.sleep(60)
+        
+        # Verify web servers from h1
+        h1 = net.get("h1")
+        info(h1.cmd("curl http://10.0.0.5"))  # Test Nginx at h5
+        info(h1.cmd("curl http://10.0.0.6"))  # Test apache at h6
+        info(h1.cmd("curl http://10.0.0.7"))  # Test caddy at h7
+
+        # CLI for user interaction
+        CLI(net)
+        
+        # Cleanup containers and network
+        mgr.removeContainer("nginx_srv")
+        mgr.removeContainer("apache_srv")
+        mgr.removeContainer("caddy_srv")
+        
+        
+    finally:
+        # Cleanup after test
+        print("[INFO] Stopping the network...")
+        net.stop()
+        print("[INFO] Stopping the manager...")
+        mgr.stop()
+        os.system("sudo mn -c")
+
+        print("[INFO] Stopping the Ryu controller...")
+        if ryu_process:
+            ryu_process.terminate()
+            stdout, stderr = ryu_process.communicate()
+            print("[RYU CONTROLLER OUTPUT]")
+            print(stdout)
+            print("[RYU CONTROLLER ERROR]")
+            print(stderr)
     
-    # Cleanup containers and network
-    mgr.removeContainer("nginx_srv")
-    mgr.removeContainer("apache_srv")
-    mgr.removeContainer("caddy_srv")
-    net.stop()
-    mgr.stop()
-    os.system("sudo mn -c")
+    
+    # controller = RemoteController("c1", ip="127.0.0.1", port=6633)
+    
+    # # Create Containernet instance
+    # net = Containernet(controller=controller, switch=OVSKernelSwitch, link=TCLink, build=False)
+    # mgr = VNFManager(net)
+    # topo = MyTopo()
+    # topo.build(net)
+    # net.addController(controller)
+    
+    # # Start the network
+    # info("Starting network...\n")
+    # net.start()
+    # info("Network started...\n")
+
+    # # Dynamically add containers with specific configurations
+    # mgr.addContainer("nginx_srv", "h5", "nginx:alpine", "nginx -g 'daemon off;'", docker_args={})
+    # mgr.addContainer("apache_srv", "h6", "httpd:alpine", "httpd-foreground", docker_args={})
+    # mgr.addContainer("caddy_srv", "h7", "caddy:alpine", "caddy run --config /etc/caddy/Caddyfile", docker_args={})
+    
+    # # Allow some time for services to start
+    # time.sleep(60)
+    
+    # # Verify web servers from h1
+    # h1 = net.get("h1")
+    # info(h1.cmd("curl http://10.0.0.5"))  # Test Nginx at h5
+    # info(h1.cmd("curl http://10.0.0.6"))  # Test apache at h6
+    # info(h1.cmd("curl http://10.0.0.7"))  # Test caddy at h7
+
+    # # CLI for user interaction
+    # CLI(net)
+    
+    # # Cleanup containers and network
+    # mgr.removeContainer("nginx_srv")
+    # mgr.removeContainer("apache_srv")
+    # mgr.removeContainer("caddy_srv")
+    # net.stop()
+    # mgr.stop()
+    # os.system("sudo mn -c")
 
 if __name__ == "__main__":
     start()
