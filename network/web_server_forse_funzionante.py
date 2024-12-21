@@ -18,7 +18,7 @@ def setup_webserver_image():
     
 def setup_docker_images():
     """
-    Prepare Docker images for web servers: httpd (Apache), nginx, and lighttpd.
+    Prepare Docker images for web servers: httpd (Apache), nginx and caddy.
     Run the Docker pull command for each image.
     """
 
