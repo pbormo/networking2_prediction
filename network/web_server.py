@@ -7,6 +7,12 @@ import os
 import time
 import subprocess
 import shlex
+import random
+import threading
+import requests
+from datetime import datetime
+from scapy.all import send, IP, TCP, UDP, ICMP
+
 
 def setup_docker_images():
     """
@@ -94,66 +100,51 @@ def start_ryu_controller():
         print(f"[ERROR] Failed to start Ryu controller: {e}")
         raise
 
-
-def unified_tcpdump(output_dir, net=None, real_time=False):
+def start_tcpdump(net, dump_dir):
     """
-    Unified function to start tcpdump on both Docker containers and Mininet hosts/switches.
-    Saves output to .pcap files and optionally displays output in real-time in the terminal.
+    Start tcpdump on all hosts and switches in the network.
+    Saves output to .pcap files in the specified directory.
+    """
+    if not os.path.exists(dump_dir):
+        os.makedirs(dump_dir)  # Create the directory if it does not exist
     
-    Args:
-        output_dir (str): Directory to save the .pcap files.
-        net (Containernet): The network object containing hosts and switches.
-        real_time (bool): Whether to display packets in real-time in the terminal.
-    """
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    processes = {}
-
-    # Handle Mininet hosts and switches
-    if net:
-        for host in net.hosts + net.switches:
-            interfaces = []
-            if "DockerHost" in str(type(host)):
-                interfaces = host.cmd("ifconfig -s | awk 'NR>1 {print $1}'").split()
-                print(f"[INFO] Detected interfaces for {host.name}: {interfaces}")
+        processes = {}
+    container_interfaces = {
+        "h5": ["h5-eth0"],
+        "h6": ["h6-eth0"],
+        "h7": ["h7-eth0"]
+    }
+    
+    for container, interfaces in container_interfaces.items():
+        for intf in interfaces:
+            h = net.get(container)
+            pcap_file = os.path.join(dump_dir, f"{intf}.pcap")
+            tcpdump_cmd = f"docker exec {container} tcpdump -i {intf} -w - | tee {pcap_file} &"
+            try:
+                print(f"[INFO] Starting tcpdump for {container} on interface {intf}, saving to {pcap_file}...")
+                processes[f"{container}-{intf}"] = subprocess.Popen(tcpdump_cmd, shell=True)
+            except Exception as e:
+                print(f"[ERROR] Failed to start tcpdump on {container} ({intf}): {e}")
+    
+    for host in net.hosts + net.switches:
+        if host.name not in container_interfaces:
+            # Generate the dump file path
+            dump_file = os.path.join(dump_dir, f"{host.name}_traffic.pcap")
+            # Define network interface for Docker hosts specifically
+            if "Docker" in str(type(host)):
+                interface = f"{host.name}-eth0"
             else:
-                # For Mininet-specific interfaces, use the host's default interface name.
-                interfaces = [host.defaultIntf().name]
-
-            for interface in interfaces:
-                dump_file = os.path.join(output_dir, f"{host.name}_{interface}_traffic.pcap")
-                if real_time:
-                    cmd = f"tcpdump -i {interface} -U -w {dump_file} -vv | tee >(cat >&2) &"
-                else:
-                    cmd = f"tcpdump -i {interface} -w {dump_file} -U &"
-                
-                info(f"[INFO] Starting tcpdump on {host.name} ({interface}), saving to {dump_file}...\n")
-                processes[f"{host.name}-{interface}"] = host.popen(cmd, shell=True)
-
-    # Handle Docker containers and their interfaces
-    try:
-        # Define containers and all their interfaces explicitly
-        container_interfaces = {
-            "nginx_srv": ["eth0"],
-            "apache_srv": ["eth0"],
-            "caddy_srv": ["eth0"],
-            "h5": ["eth0", "h5-eth0"],
-            "h6": ["eth0", "h6-eth0"],
-            "h7": ["eth0", "h7-eth0"]
-        }
-
-        for container_name, interfaces in container_interfaces.items():
-            for interface in interfaces:
-                pcap_file = os.path.join(output_dir, f"{container_name}_{interface}_traffic.pcap")
-                tcpdump_cmd = f"docker exec {container_name} tcpdump -i {interface} -w - | tee {pcap_file} &"
-
-                print(f"[INFO] Starting tcpdump for {container_name} on interface {interface}, saving to {pcap_file}...")
-                processes[f"{container_name}-{interface}"] = subprocess.Popen(tcpdump_cmd, shell=True)
-
-    except Exception as e:
-        print(f"[ERROR] Exception during tcpdump automation: {e}")
-
+                interface = host.defaultIntf().name
+            print(f"[INFO] Using interface {interface} for {host.name}")
+            
+            # Start tcpdump for each host
+            cmd = f"tcpdump -i {interface} -w {dump_file} -U &"
+            try:
+                processes[host.name] = host.popen(cmd, shell=True)
+                print(f"[INFO] Starting tcpdump on {host.name} ({interface}), saving to {dump_file}...\n")
+            except Exception as e:
+                print(f"[ERROR] Failed to start tcpdump on {host.name} ({interface}): {e}")
+    
     return processes
 
 def stop_tcpdump(processes):
@@ -161,53 +152,72 @@ def stop_tcpdump(processes):
     Stop all tcpdump processes
     """
     print("[INFO] Stopping tcpdump processes...\n")
-    for process in processes.values():
-        process.terminate()
+    for name, process in processes.items():
+        try:
+            process.terminate()
+            process.wait()
+            print(f"[INFO] Tcpdump process for {name} terminated.")
+        except Exception as e:
+            print(f"[ERROR] Failed to terminate tcpdump process for {name}: {e}")
 
-def start_traffic_generating_commands(net):
-    """
-    Generates traffic across all hosts: regular hosts (h1-h4) and Docker containers (h5-h7).
-    This method initiates multiple types of traffic like ping, HTTP requests, and iperf3.
-    """
-    print("[INFO] Generating traffic between all hosts (h1 to h4 and h5 to h7)...")
 
-    # Regular hosts and Docker hosts
-    all_hosts = net.hosts
+def generate_traffic(source_ip, target_ip, duration):
+    start_time = time.time()
+    protocols = ['TCP', 'UDP', 'ICMP']
+    ports = [80, 443, 8080, 53]  # Common ports
 
-    # Web servers (h5-h7) IPs
-    web_server_ips = ["10.0.0.5", "10.0.0.6", "10.0.0.7"]
+    while time.time() - start_time < duration:
+        protocol = random.choice(protocols)
+        sport = random.randint(1024, 65535)  # Random source port
+        dport = random.choice(ports)  # Random destination port
+        size = random.randint(64, 1500)  # Random payload size
+        payload = "X" * size
 
-    # HTTP traffic to web servers from all hosts
-    for src in all_hosts:
-        print(f"[INFO] {src.name} generating HTTP traffic to web servers...\n")
-        for server_ip in web_server_ips:
-            # Initiate HTTP requests (curl)
-            src.cmd(f"curl -s http://{server_ip} > /dev/null &")  # Silent requests
+        if protocol == 'TCP':
+            pkt = IP(src=source_ip, dst=target_ip)/TCP(sport=sport, dport=dport, flags="S")/payload
+        elif protocol == 'UDP':
+            pkt = IP(src=source_ip, dst=target_ip)/UDP(sport=sport, dport=dport)/payload
+        elif protocol == 'ICMP':
+            pkt = IP(src=source_ip, dst=target_ip)/ICMP()/payload
 
-    # Ping traffic (ICMP) between all hosts
-    for src in all_hosts:
-        print(f"[INFO] {src.name} generating ping traffic...\n")
-        for dst in all_hosts:
-            if src != dst: 
-                src.cmd(f"ping -c 5 {dst.IP()} &")  # Ping command
+        send(pkt, verbose=False)
+        time.sleep(random.uniform(0.01, 0.2))  # Random sleep between packets
 
-    # Traffic generation using iperf3 (client-server)
-    iperf_servers = [h for h in all_hosts if h.name in ["h2", "h3"]]  # h2 and h3 as servers
-    for server in iperf_servers:
-        print(f"[INFO] Starting iperf3 server on {server.name}...\n")
-        server.cmd("iperf3 -s &")  # Start iperf3 server
+def http_traffic(source_ip, target_url, duration):
+    start_time = time.time()
+    while time.time() - start_time < duration:
+        try:
+            requests.get(f'http://{target_url}', headers={'X-Forwarded-For': source_ip})
+        except Exception as e:
+            pass
+        time.sleep(random.uniform(0.5, 2))  # Random interval between requests
 
-    # Generate iperf3 traffic from clients to servers
-    for client in all_hosts:
-        for server in iperf_servers:
-            if client != server:
-                print(f"[INFO] {client.name} generating iperf traffic to {server.name}...\n")
-                client.cmd(f"iperf3 -c {server.IP()} -t 30 &")  # iperf3 client traffic
+def start_traffic(hosts, web_servers, duration):
+    threads = []
 
-    # Wait for traffic to complete before stopping
-    time.sleep(30 + 5)  # Allowing for traffic completion
+    # Generate random traffic between all hosts
+    for i in range(len(hosts)):
+        for j in range(len(hosts)):
+            if i != j:
+                t = threading.Thread(target=generate_traffic, args=(hosts[i], hosts[j], duration))
+                threads.append(t)
 
-    print("[INFO] Traffic generation completed.\n")
+    # Generate HTTP traffic to web servers
+    for host in hosts:
+        for server in web_servers:
+            t = threading.Thread(target=http_traffic, args=(host, server, duration))
+            threads.append(t)
+
+    # Start all threads
+    for t in threads:
+        t.start()
+
+    # Wait for all threads to finish
+    for t in threads:
+        t.join()
+
+    print("Traffic generation completed.")
+
 
 def start():
     setLogLevel("info")
@@ -227,25 +237,32 @@ def start():
         net.start()
         info("[INFO] Network started...\n")
 
-        dump_dir = "/home/vagrant/comnetsemu/Networking2_prediction/traffic_records"
-        # with realtime interaction of traffic on terminal
-        # tcpdump_processes = unified_tcpdump(dump_dir, net, real_time=True)
-        tcpdump_processes = unified_tcpdump(dump_dir, net, real_time=False)
+        current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        dump_dir = f"/home/vagrant/comnetsemu/Networking2_prediction/traffic_records/{current_time}"
+        
+        info("[INFO] Adding containers to the network...\n")
         mgr.addContainer("nginx_srv", "h5", "nginx:alpine", "nginx -g 'daemon off;'", docker_args={})
         mgr.addContainer("apache_srv", "h6", "httpd:alpine", "httpd-foreground", docker_args={})
         mgr.addContainer("caddy_srv", "h7", "caddy:alpine", "caddy run --config /etc/caddy/Caddyfile", docker_args={})
         
-        time.sleep(60)  # Allow some time for services to start
+        time.sleep(120)  # Allow some time for services to start
         
+        info("[INFO] Tcpdump started...\n")
+        tcpdump_processes = start_tcpdump(net, dump_dir)
         # Verify web servers from h1
         # h1 = net.get("h1")
         # info("[INFO] Testing web servers from h1...\n")
         # info(h1.cmd("curl http://10.0.0.5"))  # Test Nginx at h5
         # info(h1.cmd("curl http://10.0.0.6"))  # Test Apache at h6
         # info(h1.cmd("curl http://10.0.0.7"))  # Test Caddy at h7
-        
+
         # Generate traffic
-        start_traffic_generating_commands(net)
+        # start_traffic_generating_commands(net)
+        hosts = ['10.0.0.1', '10.0.0.2', '10.0.0.3', '10.0.0.4', '10.0.0.5', '10.0.0.6', '10.0.0.7']
+        web_servers = ['10.0.0.5', '10.0.0.6', '10.0.0.7']
+        duration = 60  # Run for 1 minute
+        info("[INFO] Traffic generation started...\n")
+        start_traffic(hosts, web_servers, duration)
         
         # CLI for user interaction
         CLI(net)
