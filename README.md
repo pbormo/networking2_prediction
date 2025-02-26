@@ -54,6 +54,12 @@ networking2_prediction/
 │   ├── lstm.py
 │
 ├── prediction/             # Folder containing `.csv` files for prediction and testing
+│   ├── test_prova_2
+│      ├── host
+│      ├── switch
+│   ├── test_singolo_finale
+│      ├── host
+│      ├── switch
 │
 ├── README.md               # Project documentation (this file)
 ├── requirements.txt        # Python dependencies
