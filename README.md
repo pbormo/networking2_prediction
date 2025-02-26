@@ -45,11 +45,10 @@ Before you begin, make sure you have the following installed:
 networking2_prediction/
 │
 ├── network/                # SDN simulation setup and management
-│   └── web_server_forse_funzionante.py
+│   └── web_server.py
 │
 ├── preprocessing/          # Scripts to preprocess `.pcap` files
-│   ├── pcap_to_csv.py
-│   └── csvfeatures.py
+│   ├── pcaptocsv_buono.py
 │
 ├── lstm/                   # LSTM model training and evaluation
 │   ├── lstm.py
@@ -89,11 +88,11 @@ sudo mn -c
 Once everything is ready, navigate to the `network` folder and start the simulation:
 ```bash
 cd network
-sudo python3 web_server_forse_funzionante.py
+sudo python3 web_server.py
 ```
 
 ### Step 2: Generate Traffic
-Use `iperf` or similar tools to generate traffic. The captured data will be saved as `.pcap` files in the `file_da_predirre` directory.
+Use `iperf` or similar tools to generate traffic. The captured data will be saved as `.pcap` files in the `file_da_predirre` directory. This directory can't be uploaded here due to the big size but you can recreate that easily. But in `prediction` directory you can find some preprocessed data that they are saved as `.csv` using the following step.
 
 ### Step 3: Preprocess the Data
 Preprocess the `.pcap` files by running:
@@ -103,34 +102,11 @@ python3 preprocess_pcap.py
 ```
 
 ### Step 4: Train and Test the LSTM Model
-Train the LSTM model with the preprocessed data:
+Use the LSTM model with the preprocessed data to train LSTM and take a prediction:
 ```bash
 cd lstm
-python3 train_lstm.py
+python3 lstm.py
 ```
-
-Evaluate the model's predictions:
-```bash
-python3 evaluate_model.py
-```
-
-## Contributing
-
-We welcome contributions! To contribute:
-1. Fork the repository.
-2. Create a feature branch:
-   ```bash
-   git checkout -b feature-name
-   ```
-3. Commit your changes:
-   ```bash
-   git commit -m "Add feature"
-   ```
-4. Push your changes:
-   ```bash
-   git push origin feature-name
-   ```
-5. Submit a pull request.
 
 ## License
 
