@@ -1,195 +1,223 @@
-import os
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler
+import tensorflow as tf
+import keras_tuner as kt
+import os
+import re
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
-from sklearn.metrics import mean_squared_error
-import matplotlib.pyplot as plt
-import ipaddress
-import ast  # Per convertire la stringa del dizionario in un dizionario Python
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import TimeSeriesSplit
+from tensorflow.keras.layers import Bidirectional
+from tensorflow.keras.regularizers import l2
 from tensorflow.keras.optimizers import Adam
-# Step 1: Load CSV files from the directory
-def load_csv_files(folder_path):
-    data_frames = []
+import matplotlib.pyplot as plt
+
+# Caricamento e preprocessamento dei dati
+def load_and_preprocess_data(folder_path, host_mapping, host_folder_path):
+    all_data = []
     for file in os.listdir(folder_path):
         if file.endswith(".csv"):
-            file_path = os.path.join(folder_path, file)
-            df = pd.read_csv(file_path)
-            if 'Timestamp' not in df.columns:
-                raise KeyError(f"The file {file} does not contain a 'Timestamp' column.")
-            data_frames.append(df)
-    return pd.concat(data_frames, ignore_index=True)
-
-# Step 2: Preprocess the data
-
-def preprocess_data(df):
-    # Convert Timestamp to datetime and sort by time
-    df['Time'] = pd.to_datetime(df['Timestamp'], unit='s', errors='coerce')
+            match = re.search(r'_(s\d+)_', file)
+            switch_id = match.group(1) if match else "unknown"
+            
+            df = pd.read_csv(os.path.join(folder_path, file))
+            df = df[['Timestamp', 'Throughput (Bps)', 'Source Port', 'Destination Port', 'Protocol', 'Jitter (s)',	'Avg Packet Size (bytes)',	'Packet Count',	'Protocol Distribution', 'Delay (s)'
+]]
+            df.dropna(inplace=True)
+            df['Timestamp'] = pd.to_datetime(df['Timestamp'])
+            df.sort_values('Timestamp', inplace=True)
+            df['Switch ID'] = switch_id
+            
+            all_data.append(df)
     
-    # Impostare 'Time' come indice
-    df.set_index('Time', inplace=True)
-    
-    # Ordinare i dati in base all'indice (Time)
-    df.sort_index(inplace=True)
+    return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
 
-    # Features selection
-    features = ['Jitter (s)', 'Avg Packet Size (bytes)', 'Packet Count', 'Delay (s)', 'Source IP', 'Destination IP']
-    target = 'Throughput (Bps)'
+# Creazione delle sequenze per l'input della rete LSTM
+def create_sequences(data, sequence_length):
+    sequences, labels = [], []
+    for i in range(len(data) - sequence_length):
+        sequences.append(data[i:i + sequence_length])
+        labels.append(data[i + sequence_length])
+    return np.array(sequences), np.array(labels)
+# Funzione per ridurre il learning rate ogni 10 epoche
+def step_decay(epoch, lr):
+    if epoch % 5 == 0 and epoch > 0:  # Ogni 10 epoche
+        return lr * 0.5  # Riduce il learning rate del 50%
+    return lr
 
-    # Estrai tutte le colonne che contengono la distribuzione dei protocolli
-    protocol_columns = [col for col in df.columns if col.startswith('Protocol_')]
-    
-    # Convertire le colonne di distribuzione dei protocolli da stringhe a dizionari e poi estrarre i valori
-    for col in protocol_columns:
-        # Convertire la stringa in un dizionario (se la colonna è una stringa)
-        df[col] = df[col].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
-
-        # Estrai il dizionario in colonne separate per ciascun protocollo
-        protocol_df = pd.json_normalize(df[col])  # Normalizza ogni dizionario in colonne separate
-        protocol_df.columns = [f'{col}_{key}' for key in protocol_df.columns]  # Rinomina le colonne con il prefisso del nome originale
-
-        # Aggiungi le nuove colonne al DataFrame originale
-        df = pd.concat([df, protocol_df], axis=1)
-    
-    # Rimuovere la colonna originale che contiene il dizionario
-    df.drop(columns=protocol_columns, inplace=True)
-
-    # Gestire gli IP mancanti
-    df['Source IP'].fillna('0.0.0.0', inplace=True)
-    df['Destination IP'].fillna('0.0.0.0', inplace=True)
-
-    # Convertire gli indirizzi IP in interi
-    df['Source IP'] = df['Source IP'].apply(lambda x: int(ipaddress.ip_address(x)))
-    df['Destination IP'] = df['Destination IP'].apply(lambda x: int(ipaddress.ip_address(x)))
-
-    # Convertire le feature numeriche
-    for feature in features:
-        if feature not in protocol_columns + ['Source IP', 'Destination IP']:
-            df[feature] = pd.to_numeric(df[feature], errors='coerce')
-
-    df[target] = pd.to_numeric(df[target], errors='coerce')
-
-    # Rimuovere le righe con valori NaN
-    df.dropna(inplace=True)
-
-    # Separare le caratteristiche dai target
-    X = df.drop(columns=[target])
-    y = df[target]
-
-    # Selezionare solo le colonne numeriche per la normalizzazione
-    numeric_columns = X.select_dtypes(include=['number']).columns
-    X_numeric = X[numeric_columns]
-
-    # Normalizzare i dati
-    scaler = MinMaxScaler()
-    scaled_features = scaler.fit_transform(X_numeric)
-    scaled_target = scaler.fit_transform(y.values.reshape(-1, 1))
-
-    return scaled_features, scaled_target, scaler, df
-
-# Step 3: Create sequences for LSTM
-def create_sequences(features, target, sequence_length):
-    X, y = [], []
-    for i in range(len(features) - sequence_length):
-        X.append(features[i:i + sequence_length])
-        y.append(target[i + sequence_length])
-    return np.array(X), np.array(y)
-
-# Step 4: Build the LSTM model con un learning rate personalizzato
-def build_lstm_model(input_shape, learning_rate=0.001):
-    # Creare l'ottimizzatore Adam con un learning rate personalizzato
-    optimizer = Adam(learning_rate=learning_rate)
-    
+# Definizione del modello LSTM
+def build_lstm_model(input_shape):
     model = Sequential([
-        LSTM(128, activation='relu', return_sequences=True, input_shape=input_shape),
-        Dropout(0.2),
-        LSTM(64, activation='relu'),
-        Dropout(0.2),
+        Bidirectional(LSTM(128, return_sequences=True), input_shape=input_shape),
+        Dropout(0.1),
+        Bidirectional(LSTM(64, return_sequences=True)),
+        Dropout(0.1),
+        Bidirectional(LSTM(32, return_sequences=False)),
+        Dropout(0.1),
+        Dense(16, activation='relu', kernel_regularizer=l2(0.01)),
         Dense(1)
     ])
-    
-    # Compilare il modello con l'ottimizzatore Adam e il learning rate
-    model.compile(optimizer=optimizer, loss='mean_squared_error')
+    optimizer = Adam(learning_rate=0.01, beta_1=0.9, beta_2=0.99, epsilon=1e-8)
+    model.compile(optimizer=optimizer, loss='mse')
+    return model
+# Creazione del modello LSTM tradizionale
+def build_lstm_model_2(input_shape):
+    model = Sequential([
+        LSTM(128, return_sequences=True, input_shape=input_shape),
+        Dropout(0.2),
+        LSTM(64, return_sequences=True),
+        Dropout(0.2),
+        LSTM(32, return_sequences=False),
+        Dense(64, activation='relu'),
+        Dense(1)
+    ])
+    model.compile(optimizer='adam', loss='mse')
     return model
 
-# Step 5: Train and evaluate the model (modificato per grafico con tre sezioni separate)
-def train_and_predict(folder_path, train_ratio=0.75, sequence_length=15, epochs=30, batch_size=32, learning_rate=0.001):
-    # Carica i dati
-    df = load_csv_files(folder_path)
-    
-    # Preprocessing dei dati
-    features, target, scaler, df = preprocess_data(df)
-
-    # Calcolare il tempo totale per separare i dati in training e testing
-    total_time = (df.index[-1] - df.index[0]).total_seconds()
-    split_time = total_time * train_ratio
-
-    # Separare i dati in base al tempo
-    train_data = df[df.index <= df.index[0] + pd.Timedelta(seconds=split_time)]
-    test_data = df[df.index > df.index[0] + pd.Timedelta(seconds=split_time)]
-
-    # Preprocessing per i dati di training e testing
-    train_features, train_target, _, _ = preprocess_data(train_data)
-    X_train, y_train = create_sequences(train_features, train_target, sequence_length)
-    
-    test_features, test_target, _, _ = preprocess_data(test_data)
-    X_test, y_test = create_sequences(test_features, test_target, sequence_length)
-
-    # Creazione e allenamento del modello con il learning rate personalizzato
-    model = build_lstm_model(X_train.shape[1:], learning_rate=learning_rate)
-    model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test))
-
-    # Previsione sui dati di test
-    predictions = model.predict(X_test)
-    
-    # Calcolare l'errore quadratico medio (MSE)
-    mse = mean_squared_error(y_test, predictions)
-    print(f"Mean Squared Error: {mse}")
-
-    # Ripristinare la scala delle previsioni e dei valori reali
-    predictions_rescaled = scaler.inverse_transform(predictions)
-    y_test_rescaled = scaler.inverse_transform(y_test)
-
-    # Grafico 1: Throughput di allenamento (zoomato sull'inizio)
-    plt.figure(figsize=(12, 6))
-
-    # Zoom sul throughput di allenamento (fino alla fine dei dati di training)
-    train_throughput_rescaled = scaler.inverse_transform(train_target.reshape(-1, 1))
-    plt.plot(df.index[:len(train_throughput_rescaled)], train_throughput_rescaled, label='Training Throughput', color='blue')
-
-    plt.legend()
-    plt.title("Training Throughput (Zoomed In)")
-    plt.xlabel("Time")
-    plt.ylabel("Throughput (Bps)")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.show()
-
-    # Grafico 2: Throughput di test vs Previsione del test
-    plt.figure(figsize=(12, 6))
-
-    # Dati di test reali
-    test_throughput_rescaled = scaler.inverse_transform(test_target.reshape(-1, 1))
-    plt.plot(df.index[len(train_throughput_rescaled):len(train_throughput_rescaled)+len(test_throughput_rescaled)], 
-             test_throughput_rescaled, label='Test Throughput', color='green')
-
-    # Dati previsti per il test
-    plt.plot(df.index[len(train_throughput_rescaled):len(train_throughput_rescaled)+len(predictions_rescaled)],
-             predictions_rescaled, label='Predicted Throughput', color='red', alpha=0.7)
-
-    plt.legend()
-    plt.title("Test Throughput vs Predicted Throughput")
-    plt.xlabel("Time")
-    plt.ylabel("Throughput (Bps)")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.show()
-
+def build_bidirectional_lstm_model(input_shape):
+    model = Sequential([
+        Bidirectional(LSTM(128, return_sequences=True), input_shape=input_shape),
+        Dropout(0.2),
+        Bidirectional(LSTM(64, return_sequences=False)),
+        Dropout(0.2),
+        Dense(32, activation='relu'),
+        Dense(1)
+    ])
+    model.compile(optimizer='adam', loss='mse')
+    return model
+# Funzione di ricerca degli iperparametri con EarlyStopping
+def build_model_hp(hp):
+    model = Sequential([
+        LSTM(hp.Int('units', min_value=32, max_value=128, step=16), return_sequences=True, input_shape=(10, 1)),
+        Dropout(hp.Float('dropout_rate', min_value=0.1, max_value=0.4, step=0.1)),
+        LSTM(hp.Int('units', min_value=16, max_value=64, step=16)),
+        Dropout(hp.Float('dropout_rate', min_value=0.1, max_value=0.4, step=0.1)),
+        Dense(32, activation='relu'),
+        Dense(1)
+    ])
+    model.compile(optimizer=hp.Choice('optimizer', values=['adam', 'rmsprop']),
+                  loss='mse')
     return model
 
-# Path to your data directory
-folder_path = r"C:\Users\ACER\Documents\netmod2\daanalizzarefinali"
-lstm_model = train_and_predict(folder_path, train_ratio=0.8, sequence_length=3, learning_rate=0.0001)
-# Run the training and evaluation pipeline
-#lstm_model = train_and_evaluate(folder_path)
+# Allenamento e valutazione del modello
+def train_and_evaluate_per_group(data_folder, host_folder, host_mapping, sequence_length=10, epochs=25, batch_size=16, output_folder="prediction"):
+    df = load_and_preprocess_data(data_folder, host_mapping, host_folder)
+    results = {}
+    os.makedirs(output_folder, exist_ok=True)
+    
+    for (switch, source_port, dest_port, protocol), group in df.groupby(['Switch ID', 'Source Port', 'Destination Port', 'Protocol']):
+        if len(group) < 15:
+            print(f"Skipping ({switch}, {source_port}, {dest_port}, {protocol}) - Insufficient data")
+            continue
+        
+        scaler = MinMaxScaler()
+        group_scaled = scaler.fit_transform(group[['Throughput (Bps)']])
+        
+        if len(group_scaled) < sequence_length:
+            print(f"Skipping ({switch}, {source_port}, {dest_port}, {protocol}) - Not enough sequences")
+            continue
+        
+        # Creazione delle sequenze
+        sequences, labels = create_sequences(group_scaled, sequence_length)
+
+        # Divisione training/test 80-20 dopo la creazione delle sequenze
+        #split_index = int(0.8 * len(sequences))  # Ora è basato sulle sequenze
+        #tscv = TimeSeriesSplit(n_splits=5)
+        #for train_idx, test_idx in tscv.split(sequences):
+        #    X_train, X_test = sequences[train_idx], sequences[test_idx]
+        #    y_train, y_test = labels[train_idx], labels[test_idx]
+        
+        # Aggiungi time_train come l'indice del dataset di allenamento
+        #time_train = group.iloc[train_idx[0]:train_idx[-1]+1]['Timestamp']
+        #time_test = group.iloc[test_idx[0]:test_idx[-1]+1]['Timestamp']
+
+        # Configurazione della ricerca degli iperparametri
+        #tuner = kt.Hyperband(
+        #    build_model_hp,
+        #    objective='val_loss',
+        #    max_epochs=20,
+        #    hyperband_iterations=4,
+        #    directory='my_dir',
+        #    project_name='lstm_tuning'
+        #)
+
+        # Ricerca degli iperparametri
+        #tuner.search(X_train, y_train, epochs=10, validation_data=(X_test, y_test))
+
+        # Modello migliore trovato dal Keras Tuner
+        #best_model = tuner.get_best_models(num_models=1)[0]
+
+        # Allena il miglior modello trovato
+        #best_model.fit(X_train, y_train, epochs=10, validation_data=(X_test, y_test))
+
+        # Previsioni con il miglior modello
+        #y_pred_best = best_model.predict(X_test)
+
+        # Dati di training e test
+        X_train, X_test, y_train, y_test = train_test_split(sequences, labels, test_size=0.2, random_state=42, shuffle=False)
+
+        # Costruzione e addestramento del modello
+        model = build_lstm_model((sequence_length, 1))
+        # Callback per la riduzione del learning rate
+        lr_callback = tf.keras.callbacks.LearningRateScheduler(step_decay)
+
+        # Addestramento del modello con la callback
+        model.fit(X_train, y_train, 
+                epochs=epochs, 
+                batch_size=batch_size, 
+                validation_data=(X_test, y_test),
+                callbacks=[lr_callback])
+
+        y_pred = model.predict(X_test)
+
+        results[(switch, source_port, dest_port, protocol)] = (y_test, y_pred)
+
+        output_file = os.path.join(output_folder, f'prediction_{switch}_{source_port}_{dest_port}_{protocol}.csv')
+        pd.DataFrame({'Real': y_test.flatten(), 'Predicted': y_pred.flatten()}).to_csv(output_file, index=False)
+
+        # Creiamo un asse temporale coerente rispetto ai dati effettivi
+        time_train = range(len(y_train))  # Indici per il training
+        time_test = range(len(y_train), len(y_train) + len(y_test))  # Indici per il test e la predizione
+
+        # Creazione del plot
+        plt.figure(figsize=(10, 5))
+
+        # Plot del throughput reale
+        plt.plot(time_train, y_train.flatten(), label='Real Throughput (Train)', linestyle='dashed', color='blue')
+        plt.plot(time_test, y_test.flatten(), label='Real Throughput (Test)', linestyle='dashed', color='green')
+
+        # Plot della predizione (sovrapposta alla fase di test)
+        plt.plot(time_test, y_pred.flatten(), label='Predicted Throughput', color='red')
+
+        # Linea di separazione tra training e test
+        plt.axvline(x=len(y_train), color='r', linestyle='--', label='Prediction Start')
+
+        # Titolo e legenda
+        plt.title(f'Switch: {switch}, Source Port: {source_port}, Destination Port: {dest_port}, Protocol: {protocol}')
+        plt.legend()
+
+        # Debug: verifica il percorso di salvataggio
+        output_path = os.path.join(output_folder, f'plot_{switch}_{source_port}_{dest_port}_{protocol}.png')
+        print(f"Saving plot to: {output_path}")
+
+        # Salvataggio del grafico
+        plt.savefig(output_path)
+        plt.close()
+
+    return results
+
+# Esempio di utilizzo
+host_mapping = {
+    "s1": ["h1", "h2", "h3"],
+    "s2": ["h4", "h5"],
+    "s3": ["h6"],
+    "s4": ["h7"]
+}
+
+results = train_and_evaluate_per_group(
+    r"C:\Users\ACER\Documents\netmod2\ultimi_test_fatti_csv\switch",
+    r"C:\Users\ACER\Documents\netmod2\ultimi_test_fatti_csv\host",
+    host_mapping
+)
