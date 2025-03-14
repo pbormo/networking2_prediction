@@ -4,15 +4,15 @@
 This project aims to predict network throughput in Software-Defined Networks (SDN) using machine learning techniques. It includes automated packet capturing, preprocessing of pcap files, and an LSTM-based prediction model.
 
 ## Table of Contents
-1. [Prerequisites](#prerequisites)
+1. [Pre-requisites](#prerequisites)
 2. [Installation](#installation)
 3. [Project Structure](#project-structure)
-4. [Running the Project](#running-the-project)
-5. [Contributing](#contributing)
-6. [License](#license)
+4. [Topology](#topology)
+5. [Running the Project](#running-the-project)
+6. [Models](#models)
 7. [Contact](#contact)
 
-## Prerequisites
+## Pre-requisites
 
 Before you begin, make sure you have the following installed:
 
@@ -20,7 +20,6 @@ Before you begin, make sure you have the following installed:
 - **Git**: Version >= 2.30
 - **VirtualBox**: For running the Comnetsemu environment
 - **Mininet**: For SDN simulation
-- **Git LFS**: For managing large files (e.g., `.pcap` files)
 - **Required Python libraries**: These can be found in the `requirements.txt` file.
 
 ## Installation
@@ -48,10 +47,10 @@ networking2_prediction/
 │   └── web_server.py
 │
 ├── preprocessing/          # Scripts to preprocess `.pcap` files
-│   ├── pcaptocsv_buono.py
+│   ├── pcaptocsv.py
 │
-├── lstm/                   # LSTM model training and evaluation
-│   ├── lstm.py
+├── model/                   # LSTM model training and evaluation
+│   ├── model.py
 │
 ├── prediction/             # Folder containing `.csv` files for prediction and testing
 │   ├── test_prova_2
@@ -64,6 +63,9 @@ networking2_prediction/
 ├── README.md               # Project documentation (this file)
 ├── requirements.txt        # Python dependencies
 ```
+
+## Topology
+picture topology
 
 ## Running the Project
 
@@ -114,9 +116,8 @@ cd lstm
 python3 lstm.py
 ```
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Models
+Explaination on models used
 
 ## Contact
 
