@@ -1,7 +1,7 @@
 
 # Network Throughput Prediction with LSTM
 
-This project aims to predict network throughput in Software-Defined Networks (SDN) using machine learning techniques. It includes automated packet capturing, preprocessing of pcap files, and an LSTM-based prediction model.
+This project aims to predict network throughput in Software-Defined Networks (SDN) using machine learning techniques. It includes automated packet capturing, preprocessing of pcap files and an LSTM-based prediction model.
 
 ## Table of Contents
 1. [Pre-requisites](#prerequisites)
@@ -49,8 +49,8 @@ networking2_prediction/
 ├── preprocessing/          # Scripts to preprocess `.pcap` files
 │   ├── pcaptocsv.py
 │
-├── model/                   # LSTM model training and evaluation
-│   ├── model.py
+├── lstm/                   # LSTM model training and evaluation
+│   ├── lstm.py
 │
 ├── prediction/             # Folder containing `.csv` files for prediction and testing
 │   ├── test_prova_2
@@ -65,7 +65,8 @@ networking2_prediction/
 ```
 
 ## Topology
-picture topology
+![topology](https://github.com/user-attachments/assets/dafe0ea7-d791-4022-8a43-ded3f43784e9)
+
 
 ## Running the Project
 
