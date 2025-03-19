@@ -70,7 +70,7 @@ def build_lstm_model_2(input_shape):
         LSTM(64, return_sequences=True),
         Dropout(0.2),
         LSTM(32, return_sequences=False),
-        Dense(64, activation='relu'),
+        Dense(16, activation='relu'),
         Dense(1)
     ])
     model.compile(optimizer='adam', loss='mse')
@@ -88,13 +88,13 @@ def build_bidirectional_lstm_model(input_shape):
     model.compile(optimizer='adam', loss='mse')
     return model
 # Funzione di ricerca degli iperparametri con EarlyStopping
-def build_model_hp(hp):
+def build_model_hp(hp, input_shape):
     model = Sequential([
-        LSTM(hp.Int('units', min_value=32, max_value=128, step=16), return_sequences=True, input_shape=(10, 1)),
-        Dropout(hp.Float('dropout_rate', min_value=0.1, max_value=0.4, step=0.1)),
+        LSTM(hp.Int('units', min_value=32, max_value=128, step=32), return_sequences=True, input_shape=input_shape),
+        Dropout(hp.Float('dropout_rate', min_value=0.1, max_value=0.3, step=0.1)),
         LSTM(hp.Int('units', min_value=16, max_value=64, step=16)),
-        Dropout(hp.Float('dropout_rate', min_value=0.1, max_value=0.4, step=0.1)),
-        Dense(32, activation='relu'),
+        Dropout(hp.Float('dropout_rate', min_value=0.1, max_value=0.3, step=0.1)),
+        Dense(16, activation='relu'),
         Dense(1)
     ])
     model.compile(optimizer=hp.Choice('optimizer', values=['adam', 'rmsprop']),
@@ -102,94 +102,96 @@ def build_model_hp(hp):
     return model
 
 # Allenamento e valutazione del modello
-def train_and_evaluate_per_group(data_folder, host_folder, host_mapping, sequence_length=10, epochs=25, batch_size=16, output_folder="prediction"):
+def train_and_evaluate_per_group(data_folder, host_folder, host_mapping, sequence_length=10, epochs=20, batch_size=16, output_folder="prediction_complete"):
     df = load_and_preprocess_data(data_folder, host_mapping, host_folder)
+    df.sort_values("Timestamp", inplace=True)
     results = {}
     os.makedirs(output_folder, exist_ok=True)
-    
+    # Crea una cartella centrale per tutti i tuner
+    tuner_base_dir = "tuning_models"
+    os.makedirs(tuner_base_dir, exist_ok=True)
+    # 🔹 Allenare un modello separato per ogni combinazione con tuning separato
     for (switch, source_port, dest_port, protocol), group in df.groupby(['Switch ID', 'Source Port', 'Destination Port', 'Protocol']):
         if len(group) < 15:
-            print(f"Skipping ({switch}, {source_port}, {dest_port}, {protocol}) - Insufficient data")
             continue
-        
+
         scaler = MinMaxScaler()
         group_scaled = scaler.fit_transform(group[['Throughput (Bps)']])
-        
+
         if len(group_scaled) < sequence_length:
-            print(f"Skipping ({switch}, {source_port}, {dest_port}, {protocol}) - Not enough sequences")
             continue
-        
-        # Creazione delle sequenze
+
         sequences, labels = create_sequences(group_scaled, sequence_length)
-
-        # Divisione training/test 80-20 dopo la creazione delle sequenze
-        #split_index = int(0.8 * len(sequences))  # Ora è basato sulle sequenze
-        #tscv = TimeSeriesSplit(n_splits=5)
-        #for train_idx, test_idx in tscv.split(sequences):
-        #    X_train, X_test = sequences[train_idx], sequences[test_idx]
-        #    y_train, y_test = labels[train_idx], labels[test_idx]
-        
-        # Aggiungi time_train come l'indice del dataset di allenamento
-        #time_train = group.iloc[train_idx[0]:train_idx[-1]+1]['Timestamp']
-        #time_test = group.iloc[test_idx[0]:test_idx[-1]+1]['Timestamp']
-
-        # Configurazione della ricerca degli iperparametri
-        #tuner = kt.Hyperband(
-        #    build_model_hp,
-        #    objective='val_loss',
-        #    max_epochs=20,
-        #    hyperband_iterations=4,
-        #    directory='my_dir',
-        #    project_name='lstm_tuning'
-        #)
-
-        # Ricerca degli iperparametri
-        #tuner.search(X_train, y_train, epochs=10, validation_data=(X_test, y_test))
-
-        # Modello migliore trovato dal Keras Tuner
-        #best_model = tuner.get_best_models(num_models=1)[0]
-
-        # Allena il miglior modello trovato
-        #best_model.fit(X_train, y_train, epochs=10, validation_data=(X_test, y_test))
-
-        # Previsioni con il miglior modello
-        #y_pred_best = best_model.predict(X_test)
-
-        # Dati di training e test
         X_train, X_test, y_train, y_test = train_test_split(sequences, labels, test_size=0.2, random_state=42, shuffle=False)
 
-        # Costruzione e addestramento del modello
-        model = build_lstm_model((sequence_length, 1))
-        # Callback per la riduzione del learning rate
-        lr_callback = tf.keras.callbacks.LearningRateScheduler(step_decay)
+        # 🔹 Crea una directory unica per ogni combinazione di porta e protocollo
+        tuner_directory = os.path.join(tuner_base_dir, f"{switch}_{source_port}_{dest_port}_{protocol}")
 
-        # Addestramento del modello con la callback
-        model.fit(X_train, y_train, 
-                epochs=epochs, 
-                batch_size=batch_size, 
-                validation_data=(X_test, y_test),
-                callbacks=[lr_callback])
+        # 🔹 Crea la directory se non esiste
+        os.makedirs(tuner_directory, exist_ok=True)
 
-        y_pred = model.predict(X_test)
+        # 🔹 Tuning separato per ogni combinazione
+        tuner = kt.Hyperband(
+            lambda hp: build_model_hp(hp, (sequence_length, 1)),
+            objective='val_loss',
+            max_epochs=20,
+            hyperband_iterations=4,
+            directory=tuner_directory,  # Directory unica per ogni combinazione
+            project_name='lstm_tuning'
+        )
+        tuner.search(X_train, y_train, epochs=20, validation_split=0.2)
 
-        results[(switch, source_port, dest_port, protocol)] = (y_test, y_pred)
+        # 🔹 Prendi i migliori iperparametri per questa combinazione
+        best_trials = tuner.oracle.get_best_trials(num_trials=1)
+        best_hps = best_trials[0].hyperparameters
+        epochs_best_model = best_trials[0].hyperparameters.get('tuner/epochs')
 
-        output_file = os.path.join(output_folder, f'prediction_{switch}_{source_port}_{dest_port}_{protocol}.csv')
-        pd.DataFrame({'Real': y_test.flatten(), 'Predicted': y_pred.flatten()}).to_csv(output_file, index=False)
+        # 🔹 Allena il modello con gli iperparametri trovati
+        best_model = build_model_hp(best_hps, (sequence_length, 1))
+        best_model.fit(X_train, y_train, epochs=epochs_best_model, validation_data=(X_test, y_test))
 
+        y_pred_best = best_model.predict(X_test)
+
+
+        # Crea e allena il modello LSTM tradizionale
+        lstm_model = build_lstm_model_2((sequence_length, 1))
+        lstm_model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test))
+
+        # Previsioni per il modello LSTM tradizionale
+        y_pred_lstm = lstm_model.predict(X_test)
+
+        # Crea e allena il modello Bidirezionale
+        bidirectional_model = build_lstm_model((sequence_length, 1))
+        bidirectional_model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test))
+
+        # Previsioni per il modello Bidirezionale
+        y_pred_bidirectional = bidirectional_model.predict(X_test)
+
+        # Salva i risultati per il modello migliore
+        output_file_best = os.path.join(output_folder, f'best_model_prediction_{switch}_{source_port}_{dest_port}_{protocol}.csv')
+        pd.DataFrame({'Real': y_test.flatten(), 'Predicted': y_pred_best.flatten()}).to_csv(output_file_best, index=False)
+
+        # Salva i risultati per il modello LSTM tradizionale
+        output_file_lstm = os.path.join(output_folder, f'lstm_prediction_{switch}_{source_port}_{dest_port}_{protocol}.csv')
+        pd.DataFrame({'Real': y_test.flatten(), 'Predicted': y_pred_lstm.flatten()}).to_csv(output_file_lstm, index=False)
+
+        # Salva i risultati per il modello Bidirezionale
+        output_file_bidirectional = os.path.join(output_folder, f'bidirectional_prediction_{switch}_{source_port}_{dest_port}_{protocol}.csv')
+        pd.DataFrame({'Real': y_test.flatten(), 'Predicted': y_pred_bidirectional.flatten()}).to_csv(output_file_bidirectional, index=False)
         # Creiamo un asse temporale coerente rispetto ai dati effettivi
         time_train = range(len(y_train))  # Indici per il training
         time_test = range(len(y_train), len(y_train) + len(y_test))  # Indici per il test e la predizione
-
-        # Creazione del plot
+        # Creazione del grafico
         plt.figure(figsize=(10, 5))
 
-        # Plot del throughput reale
+        # Plot del throughput reale (Training e Test)
         plt.plot(time_train, y_train.flatten(), label='Real Throughput (Train)', linestyle='dashed', color='blue')
         plt.plot(time_test, y_test.flatten(), label='Real Throughput (Test)', linestyle='dashed', color='green')
 
-        # Plot della predizione (sovrapposta alla fase di test)
-        plt.plot(time_test, y_pred.flatten(), label='Predicted Throughput', color='red')
+        # Plot dei throughput predetti da ciascun modello
+        plt.plot(time_test, y_pred_best.flatten(), label='Predicted Throughput (Best Model)', color='red')
+        plt.plot(time_test, y_pred_lstm.flatten(), label='Predicted Throughput (LSTM)', color='orange')
+        plt.plot(time_test, y_pred_bidirectional.flatten(), label='Predicted Throughput (Bidirectional)', color='purple')
 
         # Linea di separazione tra training e test
         plt.axvline(x=len(y_train), color='r', linestyle='--', label='Prediction Start')

@@ -53,10 +53,10 @@ networking2_prediction/
 │   ├── lstm.py
 │
 ├── prediction/             # Folder containing `.csv` files for prediction and testing
-│   ├── test_prova_2
+│   ├── test_short
 │      ├── host
 │      ├── switch
-│   ├── test_singolo_finale
+│   ├── test_complete
 │      ├── host
 │      ├── switch
 │
