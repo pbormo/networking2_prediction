@@ -101,7 +101,7 @@ sudo python3 traffic_gen.py
 ```
 
 ### Step 2: Generate Traffic
-The network traffic is generated and captured in a Mininet/Containernet emulated environment. It sets up a custom network topology, starts web and TCP servers, and uses tools like `hping3`, `curl` and `socat` to generate TCP, UDP and HTTP traffic between hosts. The script also captures all traffic using `tcpdump`, saving the results as .pcap files for later analysis. This process is repeated for multiple iterations to create diverse traffic datasets.
+The network traffic is generated and captured in a Mininet/Containernet emulated environment. It sets up a custom network topology, starts web and TCP servers, and uses tools like `hping3`, `curl` and `socat` to generate TCP, UDP and HTTP traffic between hosts. All traffic is captured using `tcpdump`, saving the results as .pcap files for later analysis. This process is repeated for multiple iterations to create diverse traffic datasets.
 
 ### Step 3: Preprocess the Data
 Preprocess the `.pcap` files by running:
