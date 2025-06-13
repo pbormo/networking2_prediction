@@ -66,8 +66,7 @@ networking2_prediction/
 ```
 
 ## Topology
-![topology](https://github.com/user-attachments/assets/dafe0ea7-d791-4022-8a43-ded3f43784e9)
-
+![topology]()<img width="523" alt="Screenshot 2025-06-13 at 18 19 32" src="https://github.com/user-attachments/assets/0a01d3e5-53e9-42ae-b7b4-ba0ed0f58cb1" />
 
 ## Running the Project
 
@@ -98,11 +97,11 @@ sudo mn -c
 Once everything is ready, navigate to the `network` folder and start the simulation:
 ```bash
 cd network
-sudo python3 web_server.py
+sudo python3 traffic_gen.py
 ```
 
 ### Step 2: Generate Traffic
-Use `iperf` or similar tools to generate traffic. The captured data will be saved as `.pcap` files in the `file_da_predirre` directory. This directory can't be uploaded here due to the big size but you can recreate that easily. But in `prediction` directory you can find some preprocessed data that they are saved as `.csv` using the following step.
+The network traffic is generated and captured in a Mininet/Containernet emulated environment. It sets up a custom network topology, starts web and TCP servers, and uses tools like `hping3`, `curl` and `socat` to generate TCP, UDP and HTTP traffic between hosts. The script also captures all traffic using `tcpdump`, saving the results as .pcap files for later analysis. This process is repeated for multiple iterations to create diverse traffic datasets.
 
 ### Step 3: Preprocess the Data
 Preprocess the `.pcap` files by running:
