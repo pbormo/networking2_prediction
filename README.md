@@ -44,7 +44,7 @@ Before you begin, make sure you have the following installed:
 networking2_prediction/
 │
 ├── network/                # SDN simulation setup and management
-│   └── web_server.py
+│   └── traffic_gen.py
 │
 ├── preprocessing/          # Scripts to preprocess `.pcap` files
 │   ├── pcaptocsv.py
@@ -60,6 +60,7 @@ networking2_prediction/
 │      ├── host
 │      ├── switch
 │
+├── results                 # Folder containing result graphs of prediction
 ├── README.md               # Project documentation (this file)
 ├── requirements.txt        # Python dependencies
 ```
@@ -117,7 +118,7 @@ cd lstm
 python3 lstm.py
 ```
 
-## Models
+## LSTM Model used
 Explaination on models used
 
 ## Contact
