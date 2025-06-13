@@ -66,7 +66,7 @@ networking2_prediction/
 ```
 
 ## Topology
-![topology]()<img width="523" alt="Screenshot 2025-06-13 at 18 19 32" src="https://github.com/user-attachments/assets/0a01d3e5-53e9-42ae-b7b4-ba0ed0f58cb1" />
+![topology](https://github.com/user-attachments/assets/0a01d3e5-53e9-42ae-b7b4-ba0ed0f58cb1)
 
 ## Running the Project
 
