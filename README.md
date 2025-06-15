@@ -66,7 +66,7 @@ networking2_prediction/
 ```
 
 ## Topology
-![topology](https://github.com/user-attachments/assets/0a01d3e5-53e9-42ae-b7b4-ba0ed0f58cb1)
+![topology](https://github.com/user-attachments/assets/b78213d1-1163-4db4-8ecd-9e10a604a90c)
 
 ## Running the Project
 
