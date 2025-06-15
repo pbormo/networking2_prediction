@@ -119,7 +119,7 @@ python3 lstm.py
 ```
 
 ## LSTM Model used
-Inside the code it can be possible to find different configuration of LSTM algorithm, for the data that we have we choose to use the classical LSTM algorithm with 3 layers, dropout (0.1) and BatchNormalization().
+Inside the code it can be possible to find different configuration of LSTM algorithm, for the data that we have we choose to use the classical LSTM algorithm with 3 layers, dropout (0.2) and BatchNormalization().
 ![LSTM_classic](https://github.com/user-attachments/assets/96c2fce7-8a58-4c88-b198-f1c68a62dc2a)
 ## Contact
 
