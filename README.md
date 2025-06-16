@@ -48,19 +48,16 @@ networking2_prediction/
 │
 ├── preprocessing/          # Scripts to preprocess `.pcap` files
 │   ├── pcaptocsv.py
+│   ├── prediction/         # Folder containing `.csv` files for prediction and testing
+│   ├── preprocessed        # Folder containing `.pcap` files for preprocessing
 │
 ├── lstm/                   # LSTM model training and evaluation
 │   ├── lstm.py
 │
-├── prediction/             # Folder containing `.csv` files for prediction and testing
-│   ├── test_short
-│      ├── host
-│      ├── switch
-│   ├── test_complete
-│      ├── host
-│      ├── switch
-│
 ├── results                 # Folder containing result graphs of prediction
+│   ├── multiple_prediction
+│   ├── aingle_prediction
+│
 ├── README.md               # Project documentation (this file)
 ├── requirements.txt        # Python dependencies
 ```
