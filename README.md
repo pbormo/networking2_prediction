@@ -51,12 +51,12 @@ networking2_prediction/
 │
 ├── prediction/         # Folder containing `.csv` files for prediction and testing
 │
-├── test_results        # Folder containing `.pcap` files for preprocessing
+├── traffic_records/        # Folder containing `.pcap` files for preprocessing
 │
 ├── lstm/                   # LSTM model training and evaluation
 │   ├── lstm.py
 │
-├── results                 # Folder containing result graphs of prediction
+├── results/                 # Folder containing result graphs of prediction
 │   ├── multiple_prediction
 │   ├── single_prediction
 │
