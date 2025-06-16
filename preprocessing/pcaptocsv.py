@@ -147,10 +147,10 @@ def save_to_csv(data, output_csv):
 
 if __name__ == "__main__":
     # Get the directory where this script is located
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    # Define the relative input and output folders
-    input_folder = os.path.join(base_dir, "preprocessed")
-    output_folder = os.path.join(base_dir, "prediction")
+    # Run the function on the provided dataset
+    current_dir = os.path.dirname(__file__)
+
+    input_folder = os.path.join(current_dir, '..', 'traffic_records')
+    output_folder = os.path.join(current_dir, '..', 'prediction')
     
     analyze_pcap_folder(input_folder, output_folder)
