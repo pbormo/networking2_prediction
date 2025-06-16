@@ -44,7 +44,7 @@ Before you begin, make sure you have the following installed:
 networking2_prediction/
 │
 ├── network/                # SDN simulation setup and management
-│   └── web_server.py
+│   └── traffic_gen.py
 │
 ├── preprocessing/          # Scripts to preprocess `.pcap` files
 │   ├── pcaptocsv.py
@@ -53,20 +53,20 @@ networking2_prediction/
 │   ├── lstm.py
 │
 ├── prediction/             # Folder containing `.csv` files for prediction and testing
-│   ├── test_prova_2
+│   ├── test_short
 │      ├── host
 │      ├── switch
-│   ├── test_singolo_finale
+│   ├── test_complete
 │      ├── host
 │      ├── switch
 │
+├── results                 # Folder containing result graphs of prediction
 ├── README.md               # Project documentation (this file)
 ├── requirements.txt        # Python dependencies
 ```
 
 ## Topology
-![topology](https://github.com/user-attachments/assets/dafe0ea7-d791-4022-8a43-ded3f43784e9)
-
+![topology](https://github.com/user-attachments/assets/b78213d1-1163-4db4-8ecd-9e10a604a90c)
 
 ## Running the Project
 
@@ -97,29 +97,30 @@ sudo mn -c
 Once everything is ready, navigate to the `network` folder and start the simulation:
 ```bash
 cd network
-sudo python3 web_server.py
+sudo python3 traffic_gen.py
 ```
 
 ### Step 2: Generate Traffic
-Use `iperf` or similar tools to generate traffic. The captured data will be saved as `.pcap` files in the `file_da_predirre` directory. This directory can't be uploaded here due to the big size but you can recreate that easily. But in `prediction` directory you can find some preprocessed data that they are saved as `.csv` using the following step.
+The network traffic is generated and captured in a Mininet/Containernet emulated environment. It sets up a custom network topology, starts web and TCP servers, and uses tools like `hping3`, `curl` and `socat` to generate TCP, UDP and HTTP traffic between hosts. All traffic is captured using `tcpdump`, saving the results as .pcap files for later analysis. This process is repeated for multiple iterations to create diverse traffic datasets.
 
 ### Step 3: Preprocess the Data
+Starting from the data contained in the `.pcap` files generated in the 2nd step we want to extract the most important features (e.g. Throughput, Jitter, Delay, Protocol...) and put them inside a `.csv` files. 
 Preprocess the `.pcap` files by running:
 ```bash
 cd preprocessing
-python3 preprocess_pcap.py
+python3 pcaptocsv.py
 ```
 
 ### Step 4: Train and Test the LSTM Model
-Use the LSTM model with the preprocessed data to train LSTM and take a prediction:
+Using the LSTM model with the preprocessed data to train LSTM and take a prediction of thoughput over the diffent switches inside the network:
 ```bash
 cd lstm
 python3 lstm.py
 ```
 
-## Models
-Explaination on models used
-
+## LSTM Model used
+Inside the code it can be possible to find different configuration of LSTM algorithm, for the data that we have we choose to use the classical LSTM algorithm with 3 layers, dropout (0.2) and BatchNormalization().
+![LSTM_classic](https://github.com/user-attachments/assets/96c2fce7-8a58-4c88-b198-f1c68a62dc2a)
 ## Contact
 
 For questions or support, contact:

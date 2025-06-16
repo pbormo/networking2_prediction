@@ -5,3 +5,4 @@ scikit-learn>=0.24.0
 tensorflow>=2.6.0
 pyshark>=0.4.0
 scapy>=2.4.4
+hping3>=3.0
