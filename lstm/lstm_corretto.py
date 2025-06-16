@@ -70,6 +70,7 @@ def build_lstm_model_2(input_shape):
         LSTM(64, return_sequences=True),
         Dropout(0.2),
         LSTM(32, return_sequences=False),
+        Dropout(0.2),
         Dense(16, activation='relu'),
         Dense(1)
     ])
@@ -87,7 +88,7 @@ def build_bidirectional_lstm_model(input_shape):
     ])
     model.compile(optimizer='adam', loss='mse')
     return model
-# Funzione di ricerca degli iperparametri con EarlyStopping
+
 def build_model_hp(hp, input_shape):
     model = Sequential([
         LSTM(hp.Int('units', min_value=32, max_value=128, step=32), return_sequences=True, input_shape=input_shape),
@@ -110,7 +111,7 @@ def train_and_evaluate_per_group(data_folder, host_folder, host_mapping, sequenc
     # Crea una cartella centrale per tutti i tuner
     tuner_base_dir = "tuning_models"
     os.makedirs(tuner_base_dir, exist_ok=True)
-    # 🔹 Allenare un modello separato per ogni combinazione con tuning separato
+    #  Allenare un modello separato per ogni combinazione con tuning separato
     for (switch, source_port, dest_port, protocol), group in df.groupby(['Switch ID', 'Source Port', 'Destination Port', 'Protocol']):
         if len(group) < 15:
             continue
@@ -124,13 +125,13 @@ def train_and_evaluate_per_group(data_folder, host_folder, host_mapping, sequenc
         sequences, labels = create_sequences(group_scaled, sequence_length)
         X_train, X_test, y_train, y_test = train_test_split(sequences, labels, test_size=0.2, random_state=42, shuffle=False)
 
-        # 🔹 Crea una directory unica per ogni combinazione di porta e protocollo
+        #  Crea una directory unica per ogni combinazione di porta e protocollo
         tuner_directory = os.path.join(tuner_base_dir, f"{switch}_{source_port}_{dest_port}_{protocol}")
-
-        # 🔹 Crea la directory se non esiste
+        lr_callback = tf.keras.callbacks.LearningRateScheduler(step_decay)
+        #  Crea la directory se non esiste
         os.makedirs(tuner_directory, exist_ok=True)
 
-        # 🔹 Tuning separato per ogni combinazione
+        #  Tuning separato per ogni combinazione
         tuner = kt.Hyperband(
             lambda hp: build_model_hp(hp, (sequence_length, 1)),
             objective='val_loss',
@@ -141,28 +142,45 @@ def train_and_evaluate_per_group(data_folder, host_folder, host_mapping, sequenc
         )
         tuner.search(X_train, y_train, epochs=20, validation_split=0.2)
 
-        # 🔹 Prendi i migliori iperparametri per questa combinazione
+        #  Prendi i migliori iperparametri per questa combinazione
         best_trials = tuner.oracle.get_best_trials(num_trials=1)
         best_hps = best_trials[0].hyperparameters
         epochs_best_model = best_trials[0].hyperparameters.get('tuner/epochs')
 
-        # 🔹 Allena il modello con gli iperparametri trovati
+        #  Allena il modello con gli iperparametri trovati
         best_model = build_model_hp(best_hps, (sequence_length, 1))
         best_model.fit(X_train, y_train, epochs=epochs_best_model, validation_data=(X_test, y_test))
-
+        best_model.fit(
+            X_train, y_train, 
+            epochs=epochs_best_model, 
+            batch_size=batch_size, 
+            validation_data=(X_test, y_test), 
+            callbacks=[lr_callback]  # <=== Aggiunto Step Decay
+        )
         y_pred_best = best_model.predict(X_test)
 
 
         # Crea e allena il modello LSTM tradizionale
         lstm_model = build_lstm_model_2((sequence_length, 1))
-        lstm_model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test))
-
+        lstm_model.fit(
+            X_train, y_train, 
+            epochs=epochs, 
+            batch_size=batch_size, 
+            validation_data=(X_test, y_test), 
+            callbacks=[lr_callback]  # <=== Aggiunto Step Decay
+        )
         # Previsioni per il modello LSTM tradizionale
         y_pred_lstm = lstm_model.predict(X_test)
 
-        # Crea e allena il modello Bidirezionale
+        # Crea e allena il modello Bidirezionale con step decay
         bidirectional_model = build_lstm_model((sequence_length, 1))
-        bidirectional_model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test))
+        bidirectional_model.fit(
+            X_train, y_train, 
+            epochs=epochs, 
+            batch_size=batch_size, 
+            validation_data=(X_test, y_test), 
+            callbacks=[lr_callback]  # <=== Aggiunto Step Decay
+        )
 
         # Previsioni per il modello Bidirezionale
         y_pred_bidirectional = bidirectional_model.predict(X_test)
