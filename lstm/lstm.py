@@ -209,7 +209,7 @@ def train_and_evaluate_per_group(data_folder, output_folder, sequence_length=5, 
 current_dir = os.path.dirname(__file__)
 
 # Go up one directory and into 'preprocessing/prediction'
-data_folder = os.path.join(current_dir, '..', 'preprocessing', 'prediction')
+data_folder = os.path.join(current_dir, '..', 'prediction')
 output_folder = os.path.join(current_dir, '..', 'results')
 results = train_and_evaluate_per_group(
     data_folder
