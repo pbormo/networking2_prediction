@@ -107,7 +107,7 @@ def build_model_hp(hp):
     return model
 
 # Training and evaluation function for each group
-def train_and_evaluate_per_group(data_folder, sequence_length=5, epochs=10, batch_size=16, output_folder=r"C:\Users\ACER\Documents\netmod2\test_finali\2025-05-28_08-00-12\iteration_1_csv\prediction_5_10_16_128_16_0_005_10_50"):
+def train_and_evaluate_per_group(data_folder, output_folder, sequence_length=5, epochs=10, batch_size=16):
     df = load_and_preprocess_data(data_folder)
     results = {}
     os.makedirs(output_folder, exist_ok=True)
@@ -129,19 +129,17 @@ def train_and_evaluate_per_group(data_folder, sequence_length=5, epochs=10, batc
         labels = []
         for i in range(len(group_scaled) - sequence_length):
             sequences.append(group_scaled[i:i + sequence_length])
-            labels.append(group_scaled[i + sequence_length][0])  # predici solo il throughput
-        # Divisione training/test 80-20 dopo la creazione delle sequenze
-        #split_index = int(0.8 * len(sequences))  # Ora è basato sulle sequenze
+            labels.append(group_scaled[i + sequence_length][0])  # predict only throughput
+        #to use time series and tuner
+        #split_index = int(0.8 * len(sequences)) 
         #tscv = TimeSeriesSplit(n_splits=5)
         #for train_idx, test_idx in tscv.split(sequences):
         #    X_train, X_test = sequences[train_idx], sequences[test_idx]
         #    y_train, y_test = labels[train_idx], labels[test_idx]
         
-        # Aggiungi time_train come l'indice del dataset di allenamento
         #time_train = group.iloc[train_idx[0]:train_idx[-1]+1]['Timestamp']
         #time_test = group.iloc[test_idx[0]:test_idx[-1]+1]['Timestamp']
 
-        # Configurazione della ricerca degli iperparametri
         #tuner = kt.Hyperband(
         #    build_model_hp,
         #    objective='val_loss',
@@ -151,16 +149,12 @@ def train_and_evaluate_per_group(data_folder, sequence_length=5, epochs=10, batc
         #    project_name='lstm_tuning'
         #)
 
-        # Ricerca degli iperparametri
         #tuner.search(X_train, y_train, epochs=10, validation_data=(X_test, y_test))
 
-        # Modello migliore trovato dal Keras Tuner
         #best_model = tuner.get_best_models(num_models=1)[0]
 
-        # Allena il miglior modello trovato
         #best_model.fit(X_train, y_train, epochs=10, validation_data=(X_test, y_test))
 
-        # Previsioni con il miglior modello
         #y_pred_best = best_model.predict(X_test)
 
         # Convert to NumPy arrays and split into train/test (80/20)
@@ -216,6 +210,7 @@ current_dir = os.path.dirname(__file__)
 
 # Go up one directory and into 'preprocessing/prediction'
 data_folder = os.path.join(current_dir, '..', 'preprocessing', 'prediction')
+output_folder = os.path.join(current_dir, '..', 'results')
 results = train_and_evaluate_per_group(
     data_folder
 )
