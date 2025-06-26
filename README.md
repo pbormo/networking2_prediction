@@ -28,7 +28,7 @@ Before you begin, make sure you have the following installed:
 
 2. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/networking2_prediction.git
+   git clone https://github.com/pbormo/networking2_prediction.git
    cd networking2_prediction
    ```
 
