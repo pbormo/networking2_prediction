@@ -212,5 +212,6 @@ current_dir = os.path.dirname(__file__)
 data_folder = os.path.join(current_dir, '..', 'prediction')
 output_folder = os.path.join(current_dir, '..', 'results')
 results = train_and_evaluate_per_group(
-    data_folder
+    data_folder,
+    output_folder
 )
