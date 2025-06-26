@@ -214,7 +214,11 @@ def start():
         start_tcp_servers(net)  # Start TCP servers on all hosts
         iterations = 40
         current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        dump_base_dir = f"/home/vagrant/comnetsemu/Networking2_prediction/traffic_records/{current_time}/"
+        base_dir = os.path.join(os.getcwd(), "traffic_records")
+        if not os.path.exists(base_dir):
+            os.makedirs(base_dir)
+        dump_base_dir = os.path.join(base_dir, current_time)
+        os.makedirs(dump_base_dir, exist_ok=True)
         repeat_experiment(net, iterations, dump_base_dir)  
     finally:
         net.stop()
