@@ -74,23 +74,17 @@ Run the Comnetsemu VM in VirtualBox. Before starting the VM, set up port forward
 ```bash
 ssh -X -p 3022 comnetsemu@localhost
 ```
+
 After logging in, configure the display for network visualization:
 ```bash
 export DISPLAY=192.168.1.177:0.0
 xclock
 ```
 
-Make sure no previous Docker containers are running:
+or use Vagrant to access the Comnetsemu environment:
 ```bash
-docker ps
-docker stop $(docker ps -q)
-ps aux | grep docker
-sudo kill -9 <process_id>
-```
-
-Ensure there are no networks in the VM:
-```bash
-sudo mn -c
+vagrant up comnetsemu
+vagrant ssh comnetsemu
 ```
 
 Once everything is ready, navigate to the `network` folder and start the simulation:
