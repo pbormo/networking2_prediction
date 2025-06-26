@@ -1,6 +1,7 @@
 import pyshark
 import csv
 import os
+import sys
 from collections import defaultdict
 
 def analyze_pcap_folder(input_folder, output_folder, window_size=1):
@@ -150,7 +151,18 @@ if __name__ == "__main__":
     # Run the function on the provided dataset
     current_dir = os.path.dirname(__file__)
 
-    input_folder = os.path.join(current_dir, '..', 'traffic_records')
+    input_base = os.path.join(current_dir, '..', 'traffic_records')
     output_folder = os.path.join(current_dir, '..', 'prediction')
+    
+    if len(sys.argv) > 1:
+        subfolder = sys.argv[1]
+        input_folder = os.path.join(input_base, subfolder)
+        if not os.path.exists(input_folder):
+            print(f"Specified folder '{input_folder}' does not exist. Exiting.")
+            sys.exit(1)
+        print(f"Processing only folder: {input_folder}")
+    else:
+        input_folder = input_base
+        print(f"Processing all folders in: {input_folder}")
     
     analyze_pcap_folder(input_folder, output_folder)

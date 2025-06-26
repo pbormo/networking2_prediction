@@ -97,11 +97,17 @@ The network traffic is generated and captured in a Mininet/Containernet emulated
 
 ### Step 3: Preprocess the Data
 Starting from the data contained in the `.pcap` files generated in the 2nd step we want to extract the most important features (e.g. Throughput, Jitter, Delay, Protocol...) and put them inside a `.csv` files. 
-Preprocess the `.pcap` files by running:
-```bash
-cd preprocessing
-python3 pcaptocsv.py
-```
+Preprocess all `.pcap` files in the `traffic_records` directory, or specify a particular subfolder to process only its contents.  
+- To process **all** `.pcap` files:
+  ```bash
+  cd preprocessing
+  python3 pcaptocsv.py
+  ```
+- To process a **specific subfolder** (e.g., `folder_name`):
+  ```bash
+  cd preprocessing
+  python3 pcaptocsv.py <folder_name>
+  ```
 
 ### Step 4: Train and Test the LSTM Model
 Using the LSTM model with the preprocessed data to train LSTM and take a prediction of thoughput over the diffent switches inside the network:
