@@ -23,20 +23,19 @@ Before you begin, make sure you have the following installed:
 - **Required Python libraries**: These can be found in the `requirements.txt` file.
 
 ## Installation
+1. Set up VirtualBox and Comnetsemu:
+   Follow the instructions in the [Comnetsemu documentation](https://www.comnetsemu.com) to configure the environment.
 
-1. Clone the repository:
+2. Clone the repository:
    ```bash
    git clone https://github.com/yourusername/networking2_prediction.git
    cd networking2_prediction
    ```
 
-2. Install the required Python libraries:
+3. Install the required Python libraries:
    ```bash
    pip install -r requirements.txt
    ```
-
-3. Set up VirtualBox and Comnetsemu:
-   Follow the instructions in the [Comnetsemu documentation](https://www.comnetsemu.com) to configure the environment.
 
 ## Project Structure
 
